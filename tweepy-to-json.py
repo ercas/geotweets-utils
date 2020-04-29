@@ -28,10 +28,10 @@ follows:
 
 1. Run script without --failsafe flag. This should correctly parse most tweets.
 2. If the exception above is thrown, install tweepy==2.0 and run script again
-   without --failsafe flag.
-3. If any other errors occur, run script with the --failsafe flag. You may also
-   want to run with the --keep-original flag if you want to diagnose the issues
-   yourself.
+   without --failsafe flag. You may want to create a new environment for this.
+3. If any other errors occur, repeat #1 and #2 --failsafe flag. You may also
+   want to run with the --keep-original flag if you want to diagnose any
+   remaining issues.
 """
 
 import datetime
