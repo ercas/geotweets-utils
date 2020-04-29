@@ -9,8 +9,9 @@ This script must be run with Python 2 as older versions of Tweepy do not run on
 Python 3. As a side effect, type annotations are not provided due to how messy
 they can get in Python 2.
 
-**NOTE**: 2014 tweets should be processed with tweepy==2.0. `ResultSet._max_id`
-was added in 2.1.0 and Tweepy objects created prior to this version will raise:
+**NOTE**: 2014 tweets that cause errors should be processed with tweepy==2.0.
+`ResultSet._max_id` was added in 2.1.0 and Tweepy objects created prior to this
+version will raise the following exception:
 
     AttributeError: 'ResultSet' object has no attribute '_max_id'
 
@@ -21,6 +22,16 @@ corrupt data; in that case, use the --failsafe switch, which will attempt to
 safely load individual pickle files by scanning for file signatures, ignoring
 all corrupted pickles and printing out the relevant line numbers. The failsafe
 loader is unaffected by file truncation.
+
+In summary, the conversion process from pickled Tweepy tweets to JSON is as
+follows:
+
+1. Run script without --failsafe flag. This should correctly parse most tweets.
+2. If the exception above is thrown, install tweepy==2.0 and run script again
+   without --failsafe flag.
+3. If any other errors occur, run script with the --failsafe flag. You may also
+   want to run with the --keep-original flag if you want to diagnose the issues
+   yourself.
 """
 
 import datetime
