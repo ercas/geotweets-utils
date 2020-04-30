@@ -253,7 +253,12 @@ if __name__ == "__main__":
                     " for distributed processing and makes datetime-based"
                     " subsets trivial."
     )
-    parser.add_argument("inputs", nargs="+")
+    parser.add_argument(
+        "inputs", nargs="+",
+        help="a list of files or directories whose files should be merged. if"
+             " there are many files to be merged, it is preferred to specify"
+             " a directory, as glob may "
+    )
     parser.add_argument(
         "-o", "--output-directory", default=".",
         help="directory to store the chunked tweets in; default is the"
@@ -275,6 +280,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # scan for input files
+    inputs = []
+    for path in tqdm.tqdm(args.inputs, desc="scanning inputs"):
+        if os.path.isfile(path):
+            inputs.append(path)
+        elif os.path.isdir(path):
+            for (root, directories, files) in os.walk(path):
+                for name in files:
+                    inputs.append(os.path.join(root, name))
+
     # initialize directories
     for directory in [args.temp_directory, args.output_directory]:
         if not os.path.isdir(directory):
@@ -289,7 +304,7 @@ if __name__ == "__main__":
             chunk_tweets,
             [
                 (
-                    split_list(args.inputs, args.jobs)[job_number],
+                    split_list(inputs, args.jobs)[job_number],
                     tempfile.mkdtemp(dir=args.temp_directory),
                     job_number
                 )
