@@ -4,6 +4,9 @@ data into a compressed CSV file.
 
 Complicated geometries, e.g. place.bounding_box, will be represented as WKB
 hex strings, and are cached to avoid expensive recomputation.
+
+For higher performance, ensure that the ujson library is installed; the script
+will mask json with this library if possible.
 """
 
 import csv
@@ -127,8 +130,8 @@ class Flattener():
 
         self.fields = fields
 
-        # we can save a lot of time by precomputing the nesting of fields once
-        # and storing the value
+        # we can save a lot of time by precomputing the nesting of fields into
+        # values required by recursive_getitem and storing them in a dict
         self.fields_split = {
             field_str: [
                 try_float(field)
@@ -165,17 +168,22 @@ class Flattener():
 
     def flatten_file(self,
                      path: str,
-                     output_file: str = None) -> None:
+                     output_directory: str = None) -> None:
         """ Flatten a newline-delimited JSON file
 
         Args:
             path: The file to be flattened.
-            output_file: The location of the destination CSV file. If None, then
-                output_file will be path with "json" replaced by "csv".
+            output_directory: The location where the converted file should be
+                saved. If None, the converted file will be saved next to the
+                input file.
         """
 
-        if output_file is None:
-            output_file = path.replace("json", "csv")
+        output_file = path.replace("json", "csv")
+
+        if output_directory is not None:
+            output_file = os.path.join(
+                output_directory, os.path.basename(output_file)
+            )
 
         temp_file = output_file + ".part"
 
@@ -205,14 +213,22 @@ if __name__ == "__main__":
         help="compressed, newline-delimited JSON files containing tweet dat."
     )
     parser.add_argument(
-        "-f", "--fields", default=None,
+        "-f", "--fields",
         help="a comma-separated list of fields to extract, with nesting"
         " indicated by periods, e.g. user.id -> [\"user\"][\"id\"]"
+    )
+    parser.add_argument(
+        "-o", "--output-directory",
+        help="the directory where the converted tweets will be saved; if not"
+             " specified, the output files will be in the same directory as"
+             " the original files"
     )
     args = parser.parse_args()
 
     if args.fields is None:
         args.fields = DEFAULT_FIELDS
+    else:
+        args.fields = args.fields.split(",")
 
     flattener = Flattener(args.fields)
     for input_file in tqdm.tqdm(
@@ -220,4 +236,4 @@ if __name__ == "__main__":
             desc="converting files",
             position=0
         ):
-        flattener.flatten_file(input_file)
+        flattener.flatten_file(input_file, args.output_directory)
