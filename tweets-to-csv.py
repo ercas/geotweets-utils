@@ -3,10 +3,11 @@
 data into a compressed CSV file.
 
 Complicated geometries, e.g. place.bounding_box, will be represented as WKB
-hex strings.
+hex strings, and are cached to avoid expensive recomputation.
 """
 
 import csv
+import functools
 import gzip
 import os
 import typing
@@ -69,6 +70,11 @@ POSSIBLE_NLONG_FIELDS = {
 }
 NLONG = "$numberLong"
 
+# we can store the calculated WKB hex strings for complicated geometries to
+# avoid having to recalculate them in the future. this is the number of WKB
+# hex strings to store in a least recently used cache
+DEFAULT_WKB_CACHE_SIZE = 512
+
 def recursive_getitem(obj, keys: list):
     """ Get the value of a nested object field.
 
@@ -102,9 +108,16 @@ def try_float(string: str) -> typing.Union[str, float]:
     except ValueError:
         return string
 
+@functools.lru_cache(maxsize=128)
+def geojson_to_wkb_hex(geojson):
+    """ Convert a GeoJSON object into a WKB hex string. """
+    return shapely.geometry.shape(geojson).wkb_hex
+
 class Flattener():
 
-    def __init__(self, fields: typing.List[str]):
+    def __init__(self,
+                 fields: typing.List[str],
+                 wkb_cache_size=DEFAULT_WKB_CACHE_SIZE):
         """ Initialize Flattener class.
 
         Args:
@@ -143,7 +156,7 @@ class Flattener():
                 if field in POSSIBLE_NLONG_FIELDS:
                     value = convert_nlong(value)
                 elif field in GEOMETRY_FIELDS:
-                    value = shapely.geometry.shape(value).wkb_hex
+                    value = geojson_to_wkb_hex(value)
             except:
                 value = None
             row.append(value)
