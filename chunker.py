@@ -257,7 +257,8 @@ if __name__ == "__main__":
         "inputs", nargs="+",
         help="a list of files or directories whose files should be merged. if"
              " there are many files to be merged, it is preferred to specify"
-             " a directory, as glob may "
+             " a directory, as glob or a pipe to xargs may split the task into"
+             " multiple processes."
     )
     parser.add_argument(
         "-o", "--output-directory", default=".",
