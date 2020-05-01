@@ -185,22 +185,23 @@ class Flattener():
                 output_directory, os.path.basename(output_file)
             )
 
-        temp_file = output_file + ".part"
+        if not os.path.isfile(output_file):
+            temp_file = output_file + ".part"
 
-        with gzip.open(path, "r") as input_fp,\
-             gzip.open(temp_file, "wt") as output_fp:
-            writer = csv.writer(output_fp)
-            writer.writerow(self.fields)
+            with gzip.open(path, "r") as input_fp,\
+                 gzip.open(temp_file, "wt") as output_fp:
+                writer = csv.writer(output_fp)
+                writer.writerow(self.fields)
 
-            for line in tqdm.tqdm(
-                    input_fp,
-                    desc=os.path.basename(input_file),
-                    position=1,
-                    leave=None
-                ):
-                writer.writerow(self.flatten_tweet(json.loads(line)))
+                for line in tqdm.tqdm(
+                        input_fp,
+                        desc=os.path.basename(input_file),
+                        position=1,
+                        leave=None
+                    ):
+                    writer.writerow(self.flatten_tweet(json.loads(line)))
 
-        os.rename(temp_file, output_file)
+            os.rename(temp_file, output_file)
 
 if __name__ == "__main__":
     #pylint: disable=invalid-name
