@@ -116,7 +116,9 @@ def expand_tweepy(tweepy_obj):
 def convert_tweets(path, output_directory=None, loader=None, keep_original=False):
     output_path = path.replace(".zip", ".json.gz")
     if output_directory:
-        output_path = os.path.join(output_directory, output_path)
+        output_path = os.path.join(
+            output_directory, os.path.basename(output_path)
+        )
     temp_path = "{}.temp".format(output_path)
 
     if not os.path.isfile(output_path):
