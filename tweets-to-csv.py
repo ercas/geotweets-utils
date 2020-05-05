@@ -102,12 +102,12 @@ def convert_nlong(nlong: dict) -> int:
     except TypeError:
         return nlong
 
-def try_float(string: str) -> typing.Union[str, float]:
-    """ Try to convert a string into a float if possible, or return the
+def try_int(string: str) -> typing.Union[str, int]:
+    """ Try to convert a string into an integer if possible, or return the
     original string if not. """
 
     try:
-        return float(string)
+        return int(string)
     except ValueError:
         return string
 
@@ -134,7 +134,7 @@ class Flattener():
         # values required by recursive_getitem and storing them in a dict
         self.fields_split = {
             field_str: [
-                try_float(field)
+                try_int(field)
                 for field in field_str.split(".")
             ]
             for field_str in fields
