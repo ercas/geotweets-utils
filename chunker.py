@@ -178,12 +178,15 @@ class UserIdMd5Chunker(TweetChunker):
         we only need a year-month-day string. """
 
         tweet = json.loads(tweet_str)
+
+        user_id = tweet["user"]["id"]
+        if type(user_id) is dict:
+            user_id = user_id["$numberLong"]
+
         md5 = hashlib.md5()
-        md5.update(
-            int(tweet["user"]["id"]).to_bytes(
+        md5.update(int(user_id).to_bytes(
                 length=8, byteorder="big", signed=False
-            )
-        )
+        ))
         return md5.hexdigest()[:self.length]
 
 def chunk_tweets(inputs: typing.List[str],
