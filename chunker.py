@@ -10,9 +10,11 @@ based on file name alone.
 
 import abc
 import gzip
+import hashlib
 import json
 import multiprocessing
 import os
+import resource
 import typing
 
 import tqdm
@@ -144,6 +146,13 @@ class CalendarDayChunker(TweetChunker):
     }
 
     def __init__(self, output_directory):
+        """ Initializes CalendarDayChunker class.
+
+        Args:
+            output_directory: The directory where chunked files should be
+                written to.
+        """
+
         TweetChunker.__init__(self, output_directory)
 
     def label_tweet(self, tweet_str: str) -> str:
@@ -156,6 +165,55 @@ class CalendarDayChunker(TweetChunker):
         return "-".join([
             date_parts[-1], self.MONTHS[date_parts[1]], date_parts[2]
         ])
+
+class UserIdMd5Chunker(TweetChunker):
+    """ Subclass of TweetChunker implementing user-level chunking by truncating
+    the MD5 hash of a user ID. This assumes that truncated MD5 hashes are
+    uniformly distributed (source: https://stackoverflow.com/a/52958215) in
+    order to ensure roughly equal distribution of users among chunks.
+    """
+
+    def __init__(self, output_directory, length: int = 3):
+        """ Initializes UserIdMd5Chunker class.
+
+        Additional args:
+            output_directory: The directory where chunked files should be
+                written to.
+            length: The number of characters to truncate the MD5 hex digest
+                to. Because hexadecimal strings have 16 characters, the total
+                number of output files will be equal to 16^(length).
+        """
+
+        TweetChunker.__init__(self, output_directory)
+        self.length = length
+
+        n_files = 16**length
+        (soft_limit, hard_limit) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if n_files > hard_limit:
+            raise RuntimeError(
+                "estimated number of files ({} exceeds hard limit for open"
+                " descriptors ({})".format(n_files, hard_limit)
+            )
+        if (n_files > soft_limit):
+            print("WARNING: adjusting resource limit for maximum number of "
+                  " open file descriptors to {}".format(
+                hard_limit
+            ))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (n_files, n_files))
+
+    def label_tweet(self, tweet_str: str) -> str:
+        """ Create an ISO datetime string string (YYYY-MM-DD) by parsing the
+        created_at attribute. We do not need to use a datetime object because
+        we only need a year-month-day string. """
+
+        tweet = json.loads(tweet_str)
+        md5 = hashlib.md5()
+        md5.update(
+            int(tweet["user"]["id"]).to_bytes(
+                length=8, byteorder="big", signed=False
+            )
+        )
+        return md5.hexdigest()[:self.length]
 
 def chunk_tweets(inputs: typing.List[str],
                  output_directory: str,
