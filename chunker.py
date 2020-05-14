@@ -158,7 +158,7 @@ class UserIdMd5Chunker(TweetChunker):
     order to ensure roughly equal distribution of users among chunks.
     """
 
-    def __init__(self, output_directory, length: int = 3):
+    def __init__(self, output_directory, length: int = 2):
         """ Initializes UserIdMd5Chunker class.
 
         Additional args:
