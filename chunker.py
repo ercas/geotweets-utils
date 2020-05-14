@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
-""" Merge and chunk tweets into different files, one for each calendar day.
+""" Merge and chunk tweets into different files.
 
-Due to time zone differences between scraping server locations and different
-data sources, geotweets data concerning tweets from a single day may exist
-across multiple different files. Additionally, the sizes of geotweets data
-files may be too large for proper distribution among cluster computing nodes or
-fast temporal subsets.
-
-This script aims to resolve this issue by merging tweet data from multiple
-sources and splitting them into one file per calendar day (YYYY-MM-DD.json.gz).
-Input data should be in newline-delimited JSON format.
-
-It would probably be best to rewrite this in a faster language eventually.
+Due to the size of Twitter data, it can be useful to repartition raw data on
+certain attributes. This allows tweets to be loaded and processed in a more
+efficient way by only loading into memory the data needed for completing a
+certain task, or making it possible to subset tweets very trivially, e.g.
+based on file name alone.
 """
 
+import abc
 import gzip
 import json
 import multiprocessing
@@ -44,20 +39,14 @@ def split_list(list_: list, n: int) -> list:
         for i in range(n)
     ]
 
-class TweetChunker():
-    """ Class implementing chunking functionality.
+class TweetChunker(abc.ABC):
+    """ Abstract base class implementing chunking functionality.
 
     Attributes:
         output_directory: The directory where chunked files are being written.
         output_file_pointers: A dict where keys are the paths of chunked output
             files and values are open file pointers to those files.
     """
-
-    MONTHS = {
-        "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05",
-        "Jun": "06", "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10",
-        "Nov": "11", "Dec": "12"
-    }
 
     def __init__(self, output_directory: str):
         """ Initializes TweetChunker class.
@@ -79,6 +68,16 @@ class TweetChunker():
         for file_fp in self.output_file_pointers.values():
             file_fp.close()
 
+    @abc.abstractmethod
+    def label_tweet(self, tweet_str: str) -> str:
+        """ Generate a chunk label to which a tweet will be assigned. All
+        tweets with the same chunk label will be grouped into the same output
+        file.
+
+        Args:
+            tweet_str: A string containing a JSON of a single tweet's data.
+        """
+
     def import_tweet_str(self, tweet_str: str) -> None:
         """ Import a tweet.
 
@@ -90,23 +89,17 @@ class TweetChunker():
             tweet_str: A street containing a JSON of a single tweet's data.
         """
 
-        # create ISO string by parsing the created_at attribute. we do not need
-        # a datetime object because we only need a year-month-day string
-        tweet = json.loads(tweet_str)
-        date_parts = tweet["created_at"].split()
-        iso_string = "-".join([
-            date_parts[-1], self.MONTHS[date_parts[1]], date_parts[2]
-        ])
+        label = self.label_tweet(tweet_str)
 
         # select the correct output file; create it if it doesn't exist yet
-        if iso_string in self.output_file_pointers:
-            output_fp = self.output_file_pointers[iso_string]
+        if label in self.output_file_pointers:
+            output_fp = self.output_file_pointers[label]
         else:
             output_fp = gzip.open(
-                os.path.join(self.output_directory, iso_string + ".json.gz"),
+                os.path.join(self.output_directory, label + ".json.gz"),
                 "w"
             )
-            self.output_file_pointers[iso_string] = output_fp
+            self.output_file_pointers[label] = output_fp
 
         output_fp.write(tweet_str)
 
@@ -139,9 +132,35 @@ class TweetChunker():
 
         input_fp.close()
 
+class CalendarDayChunker(TweetChunker):
+    """ Subclass of TweetChunker implementing chunking based on calendar day,
+    e.g. 2020-01-02.json.gz, 2020-01-02.gz, etc.
+    """
+
+    MONTHS = {
+        "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05",
+        "Jun": "06", "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10",
+        "Nov": "11", "Dec": "12"
+    }
+
+    def __init__(self, output_directory):
+        TweetChunker.__init__(self, output_directory)
+
+    def label_tweet(self, tweet_str: str) -> str:
+        """ Create an ISO datetime string string (YYYY-MM-DD) by parsing the
+        created_at attribute. We do not need to use a datetime object because
+        we only need a year-month-day string. """
+
+        tweet = json.loads(tweet_str)
+        date_parts = tweet["created_at"].split()
+        return "-".join([
+            date_parts[-1], self.MONTHS[date_parts[1]], date_parts[2]
+        ])
+
 def chunk_tweets(inputs: typing.List[str],
                  output_directory: str,
-                 job_number: int = None) -> str:
+                 job_number: int = None,
+                 chunker: TweetChunker = CalendarDayChunker) -> str:
     """ Chunk tweets into files by date.
 
     Given a list of newline-delimited JSON files containing tweet data, use
@@ -156,7 +175,7 @@ def chunk_tweets(inputs: typing.List[str],
             that job number and displays the bar in that position.
     """
 
-    chunker = TweetChunker(output_directory)
+    chunker_obj = chunker(output_directory)
 
     if job_number is not None:
         iterator = tqdm.tqdm(
@@ -167,12 +186,12 @@ def chunk_tweets(inputs: typing.List[str],
         iterator = tqdm.tqdm(inputs, unit="file")
 
     for path in iterator:
-        chunker.import_file(path, verbose=False)
+        chunker_obj.import_file(path, verbose=False)
     iterator.close()
 
-    chunker.close_file_pointers()
+    chunker_obj.close_file_pointers()
 
-    return chunker.output_directory
+    return chunker_obj.output_directory
 
 def merge_partitions(partitions: typing.List[str],
                      output_directory: str,
@@ -185,17 +204,17 @@ def merge_partitions(partitions: typing.List[str],
     different source files, resulting in a tree such as the following:
 
         partition_1/
-            2018-01-01.json.gz
-            2018-01-02.json.gz
-            2018-01-03.json.gz
+            chunk_1.json.gz
+            chunk_2.json.gz
+            chunk_3.json.gz
         partition_2/
-            2018-01-03.json.gz
-            2018-01-04.json.gz
+            chunk_3.json.gz
+            chunk_4.json.gz
 
-    Note that `2018-01-03.json.gz` exists in multiple places. This function
-    will concatenate all instances of `2018-01-03.json.gz` into the same
-    file; chunks that appear only once will be either moved or copied based on
-    the value of `keep_temporary_files`.
+    Note that `chunk_3.json.gz` exists in multiple places. This function will
+    concatenate all instances of `chunk_3.json.gz` into the same file; chunks
+    that appear only once will be either moved or copied based on the value of
+    `keep_temporary_files`.
 
     Args:
         partitions: A list of directories containing chunked tweets.
@@ -243,15 +262,41 @@ if __name__ == "__main__":
 
     import argparse
     import collections
+    import inspect
     import shutil
+    import sys
     import tempfile
+    import textwrap
 
+    all_chunkers = {
+        name: obj
+        for (name, obj) in inspect.getmembers(sys.modules[__name__])
+        if inspect.isclass(obj)
+            and issubclass(obj, TweetChunker)
+            and obj is not TweetChunker
+    }
+
+    indent_level = 2
     parser = argparse.ArgumentParser(
-        description="repartition newline-delimited JSON files containing tweet"
-                    " data into one file per day, named in ISO 8601 format"
-                    " (YYYY-MM-DD.json.gz). this format is much more suitable"
-                    " for distributed processing and makes datetime-based"
-                    " subsets trivial."
+        description="\n\n".join(
+            [
+                __doc__.lstrip(),
+                "The following chunkers are available:"
+            ] + [
+                textwrap.fill(
+                    "* {}: {}".format(
+                        obj.__name__,
+                        " ".join(
+                            line.lstrip()
+                            for line in obj.__doc__.split("\n")
+                        )
+                    ),
+                    (80 - indent_level)
+                ).replace("\n", "\n" + (" " * indent_level))
+                for obj in all_chunkers.values()
+            ]
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "inputs", nargs="+",
@@ -263,21 +308,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "-o", "--output-directory", default=".",
         help="directory to store the chunked tweets in; default is the"
-             " current directory"
+             " current directory."
     )
     parser.add_argument(
         "-t", "--temp-directory", default=DEFAULT_CHUNKER_TEMPDIR,
         help="directory to store temporary partitions in; default is the"
-             " current directory"
+             " current directory."
     )
     parser.add_argument(
         "-k", "--keep-temporary-files", default=False, action="store_true",
-        help="don't remove temporary partitions after merging"
+        help="don't remove temporary partitions after merging."
     )
     parser.add_argument(
         "-j", "--jobs", default=1, type=int,
         help="number of jobs to use; the number of partitions will equal the"
-             " number of jobs"
+             " number of jobs."
+    )
+    parser.add_argument(
+        "-c", "--chunker", default="CalendarDayChunker",
+        choices=all_chunkers.keys(),
+        help="the chunker to use for chunking tweets. available chunkers: {}"\
+            .format(", ".join(all_chunkers.keys()))
     )
     args = parser.parse_args()
 
@@ -307,7 +358,8 @@ if __name__ == "__main__":
                 (
                     split_list(inputs, args.jobs)[job_number],
                     tempfile.mkdtemp(dir=args.temp_directory),
-                    job_number
+                    job_number,
+                    all_chunkers[args.chunker]
                 )
                 for job_number in range(args.jobs)
             ]
