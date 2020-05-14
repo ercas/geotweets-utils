@@ -14,7 +14,6 @@ import hashlib
 import json
 import multiprocessing
 import os
-import resource
 import typing
 
 import tqdm
@@ -59,16 +58,9 @@ class TweetChunker(abc.ABC):
         """
 
         self.output_directory = output_directory
-        self.output_file_pointers: typing.Dict[str, typing.IO] = {}
 
         if not os.path.isdir(output_directory):
             os.makedirs(output_directory)
-
-    def close_file_pointers(self) -> None:
-        """ Close all open file pointers to chunked files. """
-
-        for file_fp in self.output_file_pointers.values():
-            file_fp.close()
 
     @abc.abstractmethod
     def label_tweet(self, tweet_str: str) -> str:
@@ -93,17 +85,10 @@ class TweetChunker(abc.ABC):
 
         label = self.label_tweet(tweet_str)
 
-        # select the correct output file; create it if it doesn't exist yet
-        if label in self.output_file_pointers:
-            output_fp = self.output_file_pointers[label]
-        else:
-            output_fp = gzip.open(
-                os.path.join(self.output_directory, label + ".json.gz"),
-                "w"
-            )
-            self.output_file_pointers[label] = output_fp
-
-        output_fp.write(tweet_str)
+        with gzip.open(
+                os.path.join(self.output_directory, label + ".json.gz"), "a"
+            ) as output_fp:
+            output_fp.write(tweet_str)
 
     def import_file(self,
                     path: str,
@@ -187,20 +172,6 @@ class UserIdMd5Chunker(TweetChunker):
         TweetChunker.__init__(self, output_directory)
         self.length = length
 
-        n_files = 16**length
-        (soft_limit, hard_limit) = resource.getrlimit(resource.RLIMIT_NOFILE)
-        if n_files > hard_limit:
-            raise RuntimeError(
-                "estimated number of files ({} exceeds hard limit for open"
-                " descriptors ({})".format(n_files, hard_limit)
-            )
-        if (n_files > soft_limit):
-            print("WARNING: adjusting resource limit for maximum number of "
-                  " open file descriptors to {}".format(
-                hard_limit
-            ))
-            resource.setrlimit(resource.RLIMIT_NOFILE, (n_files, n_files))
-
     def label_tweet(self, tweet_str: str) -> str:
         """ Create an ISO datetime string string (YYYY-MM-DD) by parsing the
         created_at attribute. We do not need to use a datetime object because
@@ -247,8 +218,6 @@ def chunk_tweets(inputs: typing.List[str],
     for path in iterator:
         chunker_obj.import_file(path, verbose=False)
     iterator.close()
-
-    chunker_obj.close_file_pointers()
 
     return chunker_obj.output_directory
 
