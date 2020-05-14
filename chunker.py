@@ -160,7 +160,8 @@ class CalendarDayChunker(TweetChunker):
 def chunk_tweets(inputs: typing.List[str],
                  output_directory: str,
                  job_number: int = None,
-                 chunker: TweetChunker = CalendarDayChunker) -> str:
+                 chunker: typing.Type[TweetChunker] = CalendarDayChunker
+                 ) -> str:
     """ Chunk tweets into files by date.
 
     Given a list of newline-delimited JSON files containing tweet data, use
