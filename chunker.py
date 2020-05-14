@@ -81,9 +81,9 @@ class TweetChunker(abc.ABC):
     def import_tweet_str(self, tweet_str: str) -> None:
         """ Import a tweet.
 
-        This function will "import" a tweet by reading its datetime string and
-        redirecting it to the appropriate chunk file pointer, opening a new one
-        if necessary.
+        This function will "import" a tweet by using self.label_tweet to
+        generate a chunk label and redirecting it to the appropriate chunk file
+        pointer, opening a new one if necessary.
 
         Args:
             tweet_str: A street containing a JSON of a single tweet's data.
