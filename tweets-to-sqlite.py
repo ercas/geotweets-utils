@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" Import Twitter data into an indexed SQLite3 database. """
+""" Import Twitter data into an indexed SQLite3 database
+
+For higher performance, ensure that the ujson library is installed; the script
+will mask json with this library if possible. """
 
 import gzip
-import json
 import sqlite3
 import typing
 
 import tqdm
+
+try:
+    import ujson as json
+except ModuleNotFoundError:
+    print("ujson not available; using json instead")
+    import json
 
 SQL_HIGH_THROUGHPUT_PRAGMAS = """
 PRAGMA synchronous = OFF;
@@ -208,11 +216,8 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
 
 #%%
 
-if __name__ == "__main__":
-    #pylint: disable=invalid-name
-
-    import argparse
-    import os
+def main():
+    """ Start importing files. """
 
     parser = argparse.ArgumentParser(
         description="import tweets into an SQLite3 database"
@@ -243,6 +248,10 @@ if __name__ == "__main__":
                         position=1,
                         leave=None
                     ):
-                    records = generate_records(row)
-                    for record in records:
+                    for record in generate_records(row):
                         record.insert_into(db)
+
+if __name__ == "__main__":
+    import argparse
+    import os
+    main()
