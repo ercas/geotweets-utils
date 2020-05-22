@@ -96,6 +96,16 @@ PRAGMA synchronous = NORMAL;
 PRAGMA journal_mode = DELETE;
 """
 
+NLONG = "$numberLong"
+
+def convert_nlong(nlong: dict) -> int:
+    """ Extract numberLong from a Mongo value if necessary. """
+
+    try:
+        return nlong[NLONG]
+    except TypeError:
+        return nlong
+
 class SqlRecord(): # pylint: disable=too-few-public-methods
     """ Class encapsulating an SQL record in a compact way.
 
@@ -184,18 +194,20 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
     records = []
 
     tweet = json.loads(tweet_str)
-    tweet_id = tweet["id"] # referenced several times; stored to save cycles
+    tweet_id = int(convert_nlong(tweet["id"])) # mongoDB
     entities = tweet["entities"]
 
     user = tweet["user"]
+    user_id = int(convert_nlong(user["id"])) # mongoDB
     records.append(SqlRecord(
         table_name="users",
         data={
+            "id": user_id,
             "verified": int(user["verified"]), # type conversion here
             **{ # leave everything else as is
                 key: user[key]
                 for key in [
-                    "id", "name", "screen_name", "description",
+                    "name", "screen_name", "description",
                     "statuses_count", "followers_count", "friends_count",
                     "time_zone", "lang", "location"
                 ]
@@ -207,9 +219,13 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
     place_id = None
     if place:
         place_id = place["id"]
-        place_bbox = place["bounding_box"]["coordinates"][0] # GeoJSON polygon
-        (min_lon, min_lat) = place_bbox[0]
-        (max_lon, max_lat) = place_bbox[2]
+        try:
+            # GeoJSON polygon
+            place_bbox = place["bounding_box"]["coordinates"][0]
+            (min_lon, min_lat) = place_bbox[0]
+            (max_lon, max_lat) = place_bbox[2]
+        except:
+            (min_lon, min_lat, max_lon, max_lat) = (None, None, None, None)
         records.append(SqlRecord(
             table_name="places",
             data={
@@ -224,18 +240,28 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
         ))
 
     (tweet_lat, tweet_lon) = tweet["coordinates"]["coordinates"]
+    # MongoDB
+    converted_ids = {
+        key: tweet.get(key)
+        for key in [
+            "quoted_status_id", "in_reply_to_status_id", "in_reply_to_user_id"
+        ]
+    }
+    for (key, value) in converted_ids.items():
+        if value:
+            converted_ids[key] = int(convert_nlong(value))
     records.append(SqlRecord(
         table_name="tweets",
         data={
             "id": tweet_id,
-            "user_id": user["id"],
+            "user_id": user_id,
             "place_id": place_id,
             "created_at": tweet["created_at"],
-            "timestamp": snowflake2utc(tweet["id"]),
+            "timestamp": snowflake2utc(tweet_id),
             "lang": tweet["lang"],
-            "quoted_status_id": tweet.get("quoted_status_id"), # nullable: .get()
-            "in_reply_to_status_id": tweet.get("in_reply_to_status_id"),
-            "in_reply_to_user_id": tweet.get("in_reply_to_user_id"),
+            "quoted_status_id": converted_ids["quoted_status_id"],
+            "in_reply_to_status_id": converted_ids["in_reply_to_status_id"],
+            "in_reply_to_user_id": converted_ids["in_reply_to_user_id"],
             "lat": tweet_lat,
             "lon": tweet_lon
         }
