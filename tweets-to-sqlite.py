@@ -282,8 +282,6 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
 
     return records
 
-#%%
-
 def main():
     """ Start importing files. """
 
@@ -298,10 +296,18 @@ def main():
         "-d", "--db", required=True,
         help="the path to the database where tweets will be imported"
     )
+    parser.add_argument(
+        "-H", "--high-throughput", action="store_true",
+        help="enable pragmas for higher-throughput importing. if the importing"
+             " fails while this is enabled, the entire database may become"
+             " corrupted."
+    )
     args = parser.parse_args()
 
     with sqlite3.connect(args.db) as db:
         db.executescript(SQL_INIT_SCHEMA)
+        if args.high_throughput:
+            db.executescript(SQL_HIGH_THROUGHPUT_PRAGMAS)
 
     for tweets_path in tqdm.tqdm(
             args.inputs,
@@ -341,6 +347,10 @@ def main():
                 "INSERT INTO imported_files(full_path, last_modified) VALUES (?, ?)",
                 (full_path, last_modified)
             )
+
+    if args.high_throughput:
+        with sqlite3.connect(args.db) as db:
+            db.executescript(SQL_NORMAL_PRAGMAS)
 
 if __name__ == "__main__":
     import argparse
