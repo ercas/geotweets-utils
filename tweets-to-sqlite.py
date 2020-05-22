@@ -258,7 +258,7 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
             "place_id": place_id,
             "created_at": tweet["created_at"],
             "timestamp": snowflake2utc(tweet_id),
-            "lang": tweet["lang"],
+            "lang": tweet.get("lang"),
             "quoted_status_id": converted_ids["quoted_status_id"],
             "in_reply_to_status_id": converted_ids["in_reply_to_status_id"],
             "in_reply_to_user_id": converted_ids["in_reply_to_user_id"],
