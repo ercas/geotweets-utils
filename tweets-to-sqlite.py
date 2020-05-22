@@ -80,6 +80,10 @@ CREATE TABLE IF NOT EXISTS mentions(             -- entities.user_mentions
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(tweet_id) REFERENCES tweets(id)
 );
+CREATE TABLE IF NOT EXISTS imported_files(
+    full_path TEXT,
+    last_modified REAL -- unix time
+);
 """
 
 SQL_HIGH_THROUGHPUT_PRAGMAS = """
@@ -299,11 +303,30 @@ def main():
     with sqlite3.connect(args.db) as db:
         db.executescript(SQL_INIT_SCHEMA)
 
-        for tweets_path in tqdm.tqdm(
-                args.inputs,
-                desc="importing files",
-                position=0
-            ): # TODO: don't import files that have already been imported
+    for tweets_path in tqdm.tqdm(
+            args.inputs,
+            desc="importing files",
+            position=0
+        ):
+        with sqlite3.connect(args.db) as db: # atomicity on per-file basis
+            full_path = os.path.abspath(tweets_path)
+            last_modified = os.stat(full_path).st_mtime
+
+            try:
+                (existing_last_modified,) = next(db.execute(
+                    "SELECT last_modified FROM imported_files WHERE full_path = ?",
+                    (full_path,)
+                ))
+                print("skipping {}".format(tweets_path))
+                if existing_last_modified < last_modified:
+                    print(
+                        "WARNING: newer version of {} exists. consider"
+                        " rebuilding the database.".format(tweets_path)
+                    )
+                continue
+            except StopIteration:
+                pass
+
             with gzip.open(tweets_path, "rt") as input_fp:
                 for row in tqdm.tqdm(
                         input_fp,
@@ -313,6 +336,11 @@ def main():
                     ):
                     for record in generate_records(row):
                         record.insert_into(db)
+
+            db.execute(
+                "INSERT INTO imported_files(full_path, last_modified) VALUES (?, ?)",
+                (full_path, last_modified)
+            )
 
 if __name__ == "__main__":
     import argparse
