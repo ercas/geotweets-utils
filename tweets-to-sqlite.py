@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS tweets(
     in_reply_to_user_id INTEGER,
     lat REAL,
     lon REAL,
+    text TEXT,
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(place_id) REFERENCES places(id)
 );
@@ -263,7 +264,8 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
             "in_reply_to_status_id": converted_ids["in_reply_to_status_id"],
             "in_reply_to_user_id": converted_ids["in_reply_to_user_id"],
             "lat": tweet_lat,
-            "lon": tweet_lon
+            "lon": tweet_lon,
+            "text": tweet["text"]
         }
     ))
 
