@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" Import Twitter data into an indexed SQLite3 database
+""" Import NDJSON Twitter data into an SQLite3 database.
 
 For higher performance, ensure that the ujson library is installed; the script
 will mask json with this library if possible. """

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" Flatten a single, compressed, newline-delimited JSON file containing tweet
-data into a compressed CSV file.
+""" Flatten a single, compressed, NDJSON file containing tweet data into a
+compressed CSV file.
 
 Complicated geometries, e.g. place.bounding_box, will be represented as WKB
 hex strings, and are cached to avoid expensive recomputation.

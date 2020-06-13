@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-""" Convert pickled Tweepy tweets into JSON format.
+""" Convert pickled Tweepy tweets into NDJSON format.
 
 This script will convert old Tweepy tweets without the new ._json attribute
 into JSON files by iterating over Tweepy object attributes and recursively

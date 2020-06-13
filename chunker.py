@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-""" Merge and chunk tweets into different files.
+""" Repartition NDJSON files containing tweets into different files according =
+to a pattern.
 
 Due to the size of Twitter data, it can be useful to repartition raw data on
 certain attributes. This allows tweets to be loaded and processed in a more
