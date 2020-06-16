@@ -34,13 +34,18 @@ SQL_FTS_INDICES = {
     "tweets": ["text"],
     "users": ["description"]
 }
-SQL_FTS_TABLE_NAME_TEMPLATE = "fts_{table}_{column}"
+SQL_FTS_TOKENIZERS = ["simple", "porter"]
+SQL_FTS_TABLE_NAME_TEMPLATE = "fts_{table}_{column}_{tokenizer}"
 SQL_FTS_TEMPLATE = """
-CREATE VIRTUAL TABLE fts_{table}_{column}
-USING fts4(content TEXT);
-
-INSERT INTO fts_{table}_{column}(content)
-    SELECT {column}
+CREATE VIRTUAL TABLE fts_{table}_{column}_{tokenizer}
+USING fts4(
+    id INTEGER PRIMARY KEY,
+    content TEXT
+    FOREIGN KEY(id) REFERENCES {table}(id),
+    tokenize={tokenizer}
+);
+INSERT INTO fts_{table}_{column}(id, content)
+    SELECT id, {column}
     FROM {table};
 """
 
@@ -68,6 +73,7 @@ def postprocess(tweets_db_path: str) -> None:
         tweets_db_path: The path to the SQLite database created by
             tweets-to-sqlite.py, containing geotweets.
     """
+    #pylint: disable=too-many-branches
 
     tweets_db = sqlite3.connect(tweets_db_path)
     tables = set(
@@ -104,23 +110,29 @@ def postprocess(tweets_db_path: str) -> None:
 
     # fts
 
-    for (table, columns) in SQL_FTS_INDICES.items():
-        for column in columns:
-            name = SQL_FTS_TABLE_NAME_TEMPLATE.format(table=table, column=column)
-            if name in tables:
-                print("FTS4 virtual table {} already exists".format(name))
-            else:
-                sys.stdout.write(
-                    "creating FTS4 virtual table for {}.{} ...".format(table, column)
+    for tokenizer in SQL_FTS_TOKENIZERS:
+        for (table, columns) in SQL_FTS_INDICES.items():
+            for column in columns:
+                name = SQL_FTS_TABLE_NAME_TEMPLATE.format(
+                    table=table, column=column, tokenizer=tokenizer
                 )
-                sys.stdout.flush()
-                now = time.time()
-                with tweets_db:
-                    tweets_db.executescript(
-                        SQL_FTS_TEMPLATE.format(table=table, column=column)
+                if name in tables:
+                    print("FTS4 virtual table {} already exists".format(name))
+                else:
+                    sys.stdout.write(
+                        "creating FTS4 virtual table for {}.{} using tokenizer {}"
+                        " ...".format(table, column, tokenizer)
                     )
-                sys.stdout.write(" {:.0f}s\n".format(time.time() - now))
-                sys.stdout.flush()
+                    sys.stdout.flush()
+                    now = time.time()
+                    with tweets_db:
+                        tweets_db.executescript(
+                            SQL_FTS_TEMPLATE.format(
+                                table=table, column=column, tokenizer=tokenizer
+                            )
+                        )
+                    sys.stdout.write(" {:.0f}s\n".format(time.time() - now))
+                    sys.stdout.flush()
 
     # spatialite
     #
