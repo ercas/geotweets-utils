@@ -44,7 +44,7 @@ USING fts4(
     FOREIGN KEY(id) REFERENCES {table}(id),
     tokenize={tokenizer}
 );
-INSERT INTO fts_{table}_{column}(id, content)
+INSERT INTO fts_{table}_{column}_{tokenizer}(id, content)
     SELECT id, {column}
     FROM {table};
 """
