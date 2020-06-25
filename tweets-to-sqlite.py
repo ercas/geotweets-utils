@@ -240,7 +240,7 @@ def generate_records(tweet_str: str) -> typing.List[SqlRecord]:
             }
         ))
 
-    (tweet_lat, tweet_lon) = tweet["coordinates"]["coordinates"]
+    (tweet_lon, tweet_lat) = tweet["coordinates"]["coordinates"]
     # MongoDB
     converted_ids = {
         key: tweet.get(key)
